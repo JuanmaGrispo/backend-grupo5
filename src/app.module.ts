@@ -10,7 +10,8 @@ import { ClassModule } from './class/class.module';
 import { NotifierController } from './notifier/notifier.controller';
 import { NotifierModule } from './notifier/notifier.module';
 import { ReservationModule } from './reservation/reservation.module';
-import { CheckinModule } from './checkin/checkin.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { QrModule } from './qr/qr.module';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { CheckinModule } from './checkin/checkin.module';
     ClassModule,
     NotifierModule,
     ReservationModule,
-    CheckinModule
+    AttendanceModule,
+    QrModule,
   ],
   controllers: [AppController, NotifierController],
   providers: [AppService],
