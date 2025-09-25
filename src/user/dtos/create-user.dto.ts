@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, IsUrl, MaxLength } from "class-validator";
+import { PickType } from '@nestjs/mapped-types';
 
 export class CreateUserDto {
   @IsEmail()
@@ -13,3 +14,5 @@ export class CreateUserDto {
   @IsUrl()
   photoUrl?: string;
 }
+
+export class UpdateUserNameDto extends PickType(CreateUserDto, ['name'] as const) {}
