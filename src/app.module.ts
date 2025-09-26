@@ -12,6 +12,7 @@ import { NotifierModule } from './notifier/notifier.module';
 import { ReservationModule } from './reservation/reservation.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { QrModule } from './qr/qr.module';
+import { BranchModule } from './branch/branch.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { QrModule } from './qr/qr.module';
     ReservationModule,
     AttendanceModule,
     QrModule,
+    BranchModule,
   ],
   controllers: [AppController, NotifierController],
   providers: [AppService],

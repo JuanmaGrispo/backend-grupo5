@@ -55,4 +55,12 @@ export class ReservationService {
       return resv;
     });
   }
+
+async getMine(userId: string) {
+  return this.resRepo.find({
+    where: { user: { id: userId } },
+    relations: ['session'],
+    order: { createdAt: 'DESC' },
+  });
+}
 }

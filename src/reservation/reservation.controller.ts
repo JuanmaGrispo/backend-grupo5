@@ -1,5 +1,5 @@
 // src/reservations/reservations.controller.ts
-import { Controller, Post, Patch, Param, Body, Req } from '@nestjs/common';
+import { Controller, Post, Patch, Param, Body, Req, Get } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 
 @Controller('reservations')
@@ -16,5 +16,11 @@ export class ReservationController {
   cancelMine(@Param('sessionId') sessionId: string, @Req() req: any) {
     const userId = req.user.sub;
     return this.svc.cancelMine(userId, sessionId);
+  }
+
+  @Get('me')
+  getMine(@Req() req: any){
+    const userId = req.user.sub;
+    return this.svc.getMine(userId);
   }
 }
