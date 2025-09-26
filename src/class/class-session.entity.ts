@@ -7,8 +7,10 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  JoinColumn,           // 👈 NUEVO
 } from 'typeorm';
 import { ClassEntity } from './class.entity';
+import { Branch } from '../branch/branch.entity'; // 👈 NUEVO (ajustá el path)
 
 export enum ClassSessionStatus {
   SCHEDULED = 'SCHEDULED',
@@ -22,6 +24,7 @@ export enum ClassSessionStatus {
 @Check(`"capacity" >= 1`)
 @Index('idx_session_class_start', ['classRef', 'startAt'])
 @Index('idx_session_status', ['status'])
+@Index('idx_session_branch_start', ['branch', 'startAt']) // 👈 NUEVO (útil para filtrar por sede+fecha)
 export class ClassSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -52,6 +55,14 @@ export class ClassSession {
     default: ClassSessionStatus.SCHEDULED,
   })
   status: ClassSessionStatus;
+
+  // 🔗 NUEVO: muchas sesiones → una branch (sede)
+  @ManyToOne(() => Branch, (b) => b.sessions, {
+    onDelete: 'SET NULL', // o 'RESTRICT' si querés impedir borrar la sede con sesiones
+    nullable: true,
+  })
+  @JoinColumn({ name: 'branch_id' }) // 👈 crea la columna branch_id en class_sessions
+  branch: Branch | null;
 
   @CreateDateColumn()
   createdAt: Date;

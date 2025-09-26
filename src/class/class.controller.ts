@@ -47,12 +47,12 @@ export class ClassController {
   }
 
   @Get(':classId/sessions')
-  listSessionsByClass(@Param('classId') classId: string, @Query() q: ListSessionsQuery) {
-    return this.svc.listSessions({ ...q, classId });
+  listSessionsByClass(@Param('classId') classRefId: string, @Query() q: ListSessionsQuery) {
+    return this.svc.listSessions({ ...q, classRefId });
   }
 
   // ------- Sesiones (globales)
-  @Get('sessions')
+  @Get('sessions') // Filtrar por sede, disciplina y fecha
   listSessions(@Query() q: ListSessionsQuery) {
     return this.svc.listSessions(q);
   }

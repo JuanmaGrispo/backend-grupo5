@@ -1,14 +1,14 @@
 // src/classes/class.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThan } from 'typeorm';
+import { Repository } from 'typeorm';
+
 import { ClassEntity } from './class.entity';
-import { ClassSession } from './class-session.entity';
+import { ClassSession, ClassSessionStatus } from './class-session.entity';
 import { SessionContext } from './state/session-context';
 import { UpdateData } from './state/session-state';
-import { ClassSessionStatus } from './class-session.entity';
 
-// DTOs (ajustá paths a los tuyos si difieren)
+// DTOs (ajustá paths si difieren)
 import { CreateClassDto } from './dtos/create-class.dto';
 import { UpdateClassDto } from './dtos/update-class.dto';
 import { ScheduleSessionDto } from './dtos/schedule-session.dto';
@@ -79,32 +79,31 @@ export class ClassService {
       capacity,
       status: ClassSessionStatus.SCHEDULED,
       reservedCount: 0,
+      // branch: ... (setealo si tu DTO lo trae)
     });
 
     return this.sessionRepo.save(session);
   }
 
+  async updateSession(sessionId: string, dto: UpdateSessionDto): Promise<ClassSession> {
+    const s = await this.sessionRepo.findOne({ where: { id: sessionId } });
+    if (!s) throw new NotFoundException('Sesión no encontrada');
 
-async updateSession(sessionId: string, dto: UpdateSessionDto): Promise<ClassSession> {
-  const s = await this.sessionRepo.findOne({ where: { id: sessionId } });
-  if (!s) throw new NotFoundException('Sesión no encontrada');
+    const patch: UpdateData = {};
+    if (dto.startAt) patch.startAt = new Date(dto.startAt);
+    if (dto.durationMin !== undefined) patch.durationMin = dto.durationMin;
+    if (dto.capacity !== undefined) patch.capacity = dto.capacity;
 
-  // 👇 Map explícito DTO -> UpdateData (Date en startAt)
-  const patch: UpdateData = {};
-  if (dto.startAt) patch.startAt = new Date(dto.startAt);
-  if (dto.durationMin !== undefined) patch.durationMin = dto.durationMin;
-  if (dto.capacity !== undefined) patch.capacity = dto.capacity;
-
-  const ctx = new SessionContext(s, {}, new Date());
-  await ctx.update(patch);
-  return this.sessionRepo.save(ctx.getAggregate());
-}
+    const ctx = new SessionContext(s, {}, new Date());
+    await ctx.update(patch);
+    return this.sessionRepo.save(ctx.getAggregate());
+  }
 
   async cancelSession(sessionId: string, reason?: string): Promise<ClassSession> {
     const s = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!s) throw new NotFoundException('Sesión no encontrada');
 
-    const ctx = new SessionContext(s, /* { reservations: tuAdapter } */ {}, new Date());
+    const ctx = new SessionContext(s, /* adapters */ {}, new Date());
     await ctx.cancel(reason);
     return this.sessionRepo.save(ctx.getAggregate());
   }
@@ -135,32 +134,50 @@ async updateSession(sessionId: string, dto: UpdateSessionDto): Promise<ClassSess
   async getSession(sessionId: string): Promise<ClassSession> {
     const s = await this.sessionRepo.findOne({
       where: { id: sessionId },
-      relations: { classRef: true },
+      relations: { classRef: true, branch: true },
     });
     if (!s) throw new NotFoundException('Sesión no encontrada');
     return s;
   }
 
-  async listSessions(q: ListSessionsQuery) {
-    const where: any = {};
-    if (q.classId) where.classRef = { id: q.classId };
-    if (q.discipline) where['classRef'] = { ...(where.classRef ?? {}), discipline: q.discipline };
-    if (q.locationName) where['classRef'] = { ...(where.classRef ?? {}), locationName: q.locationName };
+  // ---------- Listado con filtros (sede, disciplina, fecha, estado) ----------
+  // q: { branchId?, classRefId?, status?, day?, page?, pageSize? }
+async listSessions(q: ListSessionsQuery) {
+  const page = q.page ?? 1;
+  const pageSize = q.pageSize ?? 20;
 
-    if (q.from && q.to) where.startAt = Between(new Date(q.from), new Date(q.to));
-    else if (q.from) where.startAt = MoreThanOrEqual(new Date(q.from));
-    else if (q.to) where.startAt = LessThan(new Date(q.to));
+  const qb = this.sessionRepo
+    .createQueryBuilder('s')
+    .leftJoinAndSelect('s.classRef', 'c')
+    .leftJoinAndSelect('s.branch', 'b')
+    .orderBy('s.startAt', 'ASC'); // ← sin comillas
 
-    const page = Math.max(1, Number(q.page ?? 1));
-    const pageSize = Math.min(100, Math.max(1, Number(q.pageSize ?? 20)));
-
-    const [items, total] = await this.sessionRepo.findAndCount({
-      where,
-      relations: { classRef: true },
-      order: { startAt: 'ASC' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    });
-    return { items, total, page, pageSize };
+  // sede
+  if (q.branchId) {
+    qb.andWhere('b.id = :branchId', { branchId: q.branchId });
   }
+
+  // disciplina / clase
+  if (q.classRefId) {
+    qb.andWhere('c.id = :classRefId', { classRefId: q.classRefId });
+  }
+
+  // estado
+  if (q.status) {
+    qb.andWhere('s.status = :status', { status: q.status });
+  }
+
+  // día UTC [00:00, 24:00)
+  if (q.day) {
+    const from = new Date(`${q.day}T00:00:00.000Z`);
+    const to = new Date(from);
+    to.setUTCDate(from.getUTCDate() + 1);
+    qb.andWhere('s.startAt >= :from AND s.startAt < :to', { from, to });
+  }
+
+  qb.skip((page - 1) * pageSize).take(pageSize);
+
+  const [items, total] = await qb.getManyAndCount();
+  return { items, total, page, pageSize, hasMore: page * pageSize < total };
+}
 }
