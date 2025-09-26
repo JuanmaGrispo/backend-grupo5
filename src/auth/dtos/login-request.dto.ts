@@ -1,9 +1,18 @@
-import { IsEmail, isEmail, IsString } from 'class-validator';
+// src/auth/dtos/login-request.dto.ts
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class LoginRequestDto {
   @IsEmail()
-  email!: string
+  email: string;
 
+  // 'password' | 'otp' (default: 'password')
+  @IsOptional()
+  @IsIn(['password', 'otp'])
+  mode?: 'password' | 'otp' = 'password';
+
+  // requerido sólo cuando mode === 'password'
+  @IsOptional()
   @IsString()
-  password!: string
+  @MinLength(6)
+  password?: string;
 }

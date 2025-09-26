@@ -9,12 +9,13 @@ import { Public } from './public.decorator';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  // Registro explícito
+  // ===== Register (siempre OTP) =====
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.OK)
   async startRegister(@Body() dto: LoginRequestDto) {
-    await this.auth.startOtp(dto.email, 'register', dto.password); // 👈 acá va 'register'
+    // crea user si no existe y guarda passwordHash
+    await this.auth.startOtp(dto.email, 'register', dto.password);
     return { success: true, message: 'OTP enviado para registro' };
   }
 
@@ -26,20 +27,28 @@ export class AuthController {
     return { success: true, message: 'Registro exitoso', ...result };
   }
 
-  // Login explícito
+  // ===== Login híbrido (password u otp según mode) =====
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async startLogin(@Body() dto: LoginRequestDto) {
-    const {accessToken, user} = await this.auth.login(dto.email, dto.password);
-    return {accessToken, user};
+  async login(@Body() dto: LoginRequestDto) {
+    const mode = dto.mode ?? 'password';
+
+    if (mode === 'password') {
+      const { accessToken, user } = await this.auth.loginPassword(dto.email, dto.password!);
+      return { accessToken, user, mode: 'password' };
+    }
+
+    // mode === 'otp'
+    await this.auth.startOtpLogin(dto.email);
+    return { success: true, message: 'OTP enviado', mode: 'otp' };
   }
 
   @Public()
   @Post('login/verify')
   @HttpCode(HttpStatus.OK)
   async verifyLogin(@Body() dto: LoginVerifyDto) {
-    const result = await this.auth.verifyOtp(dto.email, dto.code);
-    return { success: true, message: 'Login exitoso', ...result };
+    const { accessToken, user } = await this.auth.verifyOtp(dto.email, dto.code);
+    return { success: true, message: 'Login exitoso', accessToken, user };
   }
 }

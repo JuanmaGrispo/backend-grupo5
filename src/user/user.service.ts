@@ -43,4 +43,15 @@ export class UserService {
     user.name = trimmed;
     return this.userRepo.save(user);
   }
+
+
+// Trae también passwordHash
+async getUserForAuth(email: string) {
+  return this.userRepo
+    .createQueryBuilder('u')
+    .addSelect('u.passwordHash')
+    .where('u.email = :email', { email })
+    .getOne();
+}
+
 }

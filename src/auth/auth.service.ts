@@ -1,3 +1,4 @@
+// src/auth/auth.service.ts
 import {
   BadRequestException,
   Injectable,
@@ -6,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { EmailService } from 'src/email/email.service';
 import { UserService } from 'src/user/user.service';
 import { UserOtp } from './user-otp.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,9 +22,8 @@ export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly userService: UserService,
-    private readonly emailService: EmailService,
     @InjectRepository(UserOtp) private readonly otpRepo: Repository<UserOtp>,
-  ) { }
+  ) {}
 
   private normalizeEmail(e: string) {
     return (e || '').trim().toLowerCase();
@@ -36,62 +35,88 @@ export class AuthService {
     return String(Math.floor(Math.random() * (max - min + 1)) + min);
   }
 
-  // start OTP: 'login' (exige que exista), 'register' (crea si no existe), 'auto' (default: crea si no existe)
-async startOtp(emailRaw: string, mode: OtpMode = 'auto', plainPassword?: string) {
-  const email = this.normalizeEmail(emailRaw);
-  if (!email) throw new BadRequestException('Email requerido');
+  // ===== LOGIN con password =====
+  async loginPassword(emailRaw: string, password: string) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email || !password) throw new BadRequestException('Email y password requeridos');
 
-  let user = await this.userService.getUserByEmail(email);
+    // trae passwordHash explícitamente
+    const user = await this.userService.getUserForAuth(email);
+    if (!user) throw new NotFoundException('Usuario no encontrado');
 
-  // Login explícito: el usuario debe existir
-  if (mode === 'login' && !user) {
-    throw new NotFoundException('Usuario no encontrado');
+    if (!user.passwordHash) throw new UnauthorizedException('Usuario sin password configurado');
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Credenciales inválidas');
+
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = await this.jwt.signAsync(payload, {
+      expiresIn: process.env.JWT_EXPIRES || '7d',
+    });
+
+    return {
+      accessToken,
+      user: { id: user.id, email: user.email, name: (user as any).name ?? null },
+    };
   }
 
-  // Register / Auto: crear si no existe
-  if ((mode === 'register' || mode === 'auto') && !user) {
-    if (!plainPassword) {
-      throw new BadRequestException('Se requiere contraseña en el registro');
+  // ===== Inicio de OTP genérico (usado por register/login) =====
+  async startOtp(emailRaw: string, mode: OtpMode = 'auto', plainPassword?: string) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email) throw new BadRequestException('Email requerido');
+
+    let user = await this.userService.getUserByEmail(email);
+
+    if (mode === 'login' && !user) {
+      throw new NotFoundException('Usuario no encontrado');
     }
 
-    const passwordHash = await bcrypt.hash(plainPassword, 10);
-    user = await this.userService.createUser({
-      email,
-      passwordHash,
+    if ((mode === 'register' || mode === 'auto') && !user) {
+      if (!plainPassword) {
+        throw new BadRequestException('Se requiere contraseña en el registro');
+      }
+      const passwordHash = await bcrypt.hash(plainPassword, 10);
+      user = await this.userService.createUser({ email, passwordHash });
+    }
+
+    // evitar re-enviar si hay OTP vigente
+    const existing = await this.otpRepo.findOne({
+      where: { email, used: false },
+      order: { createdAt: 'DESC' },
     });
+    if (existing && existing.expiresAt > new Date()) {
+      throw new BadRequestException({
+        code: 'OTP_ALREADY_SENT',
+        message: 'Ya se envió un OTP vigente. Revisá tu correo.',
+      });
+    }
+
+    const code = this.generateOtp(6);
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + this.ttlMinutes * 60_000);
+
+    await this.otpRepo.save(
+      this.otpRepo.create({
+        email,
+        codeHash,
+        expiresAt,
+        used: false,
+        attempts: 0,
+        user: { id: user!.id } as any,
+      }),
+    );
+
+    // si querés enviar por email, llamá acá a tu EmailService
+    // await this.emailService.sendOtp(email, code, this.ttlMinutes);
+
+    return { success: true };
   }
 
-  // Evitar re-enviar si ya hay un OTP vigente
-  const existing = await this.otpRepo.findOne({
-    where: { email, used: false },
-    order: { createdAt: 'DESC' },
-  });
-  if (existing && existing.expiresAt > new Date()) {
-    throw new BadRequestException({
-      code: 'OTP_ALREADY_SENT',
-      message: 'Ya se envió un OTP vigente. Revisá tu correo.',
-    });
+  // Conveniencia para login OTP
+  async startOtpLogin(emailRaw: string) {
+    return this.startOtp(emailRaw, 'login');
   }
 
-  const code = this.generateOtp(6);
-  const codeHash = await bcrypt.hash(code, 10);
-  const expiresAt = new Date(Date.now() + this.ttlMinutes * 60_000);
-
-  await this.otpRepo.save(
-    this.otpRepo.create({
-      email,
-      codeHash,
-      expiresAt,
-      used: false,
-      attempts: 0,
-      user: { id: user!.id } as any,
-    }),
-  );
-
-  await this.emailService.sendOtp(email, code, this.ttlMinutes);
-  return { success: true };
-}
-
+  // ===== Verificación de OTP (paso 2) =====
   async verifyOtp(emailRaw: string, code: string) {
     const email = this.normalizeEmail(emailRaw);
     if (!email || !code) throw new BadRequestException('Email y código requeridos');
@@ -122,29 +147,6 @@ async startOtp(emailRaw: string, mode: OtpMode = 'auto', plainPassword?: string)
 
     const user = await this.userService.getUserByEmail(email);
     if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    const payload = { sub: user.id, email: user.email };
-    const accessToken = await this.jwt.signAsync(payload, {
-      expiresIn: process.env.JWT_EXPIRES || '7d',
-    });
-
-    return {
-      accessToken,
-      user: { id: user.id, email: user.email, name: (user as any).name ?? null },
-    };
-    
-  }
-
-    async login(emailRaw: string, password: string) {
-    const email = this.normalizeEmail(emailRaw);
-    if (!email || !password) throw new BadRequestException('Email y password requeridos');
-
-    const user = await this.userService.getUserByEmail(email);
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    // asegurate de que tu User tenga passwordHash
-    const ok = user.passwordHash && (await bcrypt.compare(password, user.passwordHash));
-    if (!ok) throw new UnauthorizedException('Credenciales inválidas');
 
     const payload = { sub: user.id, email: user.email };
     const accessToken = await this.jwt.signAsync(payload, {
