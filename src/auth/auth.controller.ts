@@ -1,13 +1,32 @@
 // src/auth/auth.controller.ts
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Get, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginRequestDto } from './dtos/login-request.dto';
 import { LoginVerifyDto } from './dtos/login-verify.dto';
+import { LoginPasswordDto } from './dtos/login-password.dto';
 import { Public } from './public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
+
+  // Check login options for user
+  @Public()
+  @Get('login-options')
+  @HttpCode(HttpStatus.OK)
+  async getLoginOptions(@Query('email') email: string) {
+    const options = await this.auth.checkUserPasswordStatus(email);
+    return { success: true, ...options };
+  }
+
+  // Password-based login
+  @Public()
+  @Post('login/password')
+  @HttpCode(HttpStatus.OK)
+  async loginWithPassword(@Body() dto: LoginPasswordDto) {
+    const result = await this.auth.loginWithPassword(dto.email, dto.password);
+    return { success: true, message: 'Login exitoso', ...result };
+  }
 
   // Registro explícito
   @Public()
@@ -26,7 +45,7 @@ export class AuthController {
     return { success: true, message: 'Registro exitoso', ...result };
   }
 
-  // Login explícito
+  // Login explícito (OTP)
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)

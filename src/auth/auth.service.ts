@@ -36,6 +36,44 @@ export class AuthService {
     return String(Math.floor(Math.random() * (max - min + 1)) + min);
   }
 
+  // Password-based login
+  async loginWithPassword(emailRaw: string, password: string) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email || !password) throw new BadRequestException('Email y contraseña requeridos');
+
+    const user = await this.userService.loginWithPassword(email, password);
+    if (!user) {
+      throw new UnauthorizedException({ 
+        code: 'INVALID_CREDENTIALS', 
+        message: 'Email o contraseña incorrectos' 
+      });
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = await this.jwt.signAsync(payload, {
+      expiresIn: process.env.JWT_EXPIRES || '7d',
+    });
+
+    return {
+      accessToken,
+      user: { id: user.id, email: user.email, name: user.name ?? null, hasPassword: user.hasPassword },
+    };
+  }
+
+  // Check if user has password set
+  async checkUserPasswordStatus(emailRaw: string) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email) throw new BadRequestException('Email requerido');
+
+    const user = await this.userService.getUserByEmail(email);
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    return {
+      hasPassword: user.hasPassword,
+      canUseOtp: true, // Always available as fallback
+    };
+  }
+
   // start OTP: 'login' (exige que exista), 'register' (crea si no existe), 'auto' (default: crea si no existe)
   async startOtp(emailRaw: string, mode: OtpMode = 'auto') {
     const email = this.normalizeEmail(emailRaw);
@@ -117,8 +155,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: { id: user.id, email: user.email, name: (user as any).name ?? null },
+      user: { id: user.id, email: user.email, name: user.name ?? null, hasPassword: user.hasPassword },
     };
-    
   }
 }

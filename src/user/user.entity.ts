@@ -18,6 +18,13 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
+  // Password-related fields
+  @Column({ nullable: true })
+  passwordHash?: string;
+
+  @Column({ default: false })
+  hasPassword: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
