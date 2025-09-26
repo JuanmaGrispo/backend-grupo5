@@ -37,47 +37,60 @@ export class AuthService {
   }
 
   // start OTP: 'login' (exige que exista), 'register' (crea si no existe), 'auto' (default: crea si no existe)
-  async startOtp(emailRaw: string, mode: OtpMode = 'auto') {
-    const email = this.normalizeEmail(emailRaw);
-    if (!email) throw new BadRequestException('Email requerido');
+async startOtp(emailRaw: string, mode: OtpMode = 'auto', plainPassword?: string) {
+  const email = this.normalizeEmail(emailRaw);
+  if (!email) throw new BadRequestException('Email requerido');
 
-    let user = await this.userService.getUserByEmail(email);
+  let user = await this.userService.getUserByEmail(email);
 
-    if (mode === 'login' && !user) throw new NotFoundException('Usuario no encontrado');
-    if ((mode === 'register' || mode === 'auto') && !user) {
-      user = await this.userService.createUser({ email }); // create minimal
-    }
-
-    // Evitar re-enviar si ya hay un OTP vigente
-    const existing = await this.otpRepo.findOne({
-      where: { email, used: false },
-      order: { createdAt: 'DESC' },
-    });
-    if (existing && existing.expiresAt > new Date()) {
-      throw new BadRequestException({
-        code: 'OTP_ALREADY_SENT',
-        message: 'Ya se envió un OTP vigente. Revisá tu correo.',
-      });
-    }
-
-    const code = this.generateOtp(6);
-    const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = new Date(Date.now() + this.ttlMinutes * 60_000);
-
-    await this.otpRepo.save(
-      this.otpRepo.create({
-        email,
-        codeHash,
-        expiresAt,
-        used: false,
-        attempts: 0,
-        user: { id: user!.id } as any
-      }),
-    );
-
-    await this.emailService.sendOtp(email, code, this.ttlMinutes);
-    return { success: true };
+  // Login explícito: el usuario debe existir
+  if (mode === 'login' && !user) {
+    throw new NotFoundException('Usuario no encontrado');
   }
+
+  // Register / Auto: crear si no existe
+  if ((mode === 'register' || mode === 'auto') && !user) {
+    if (!plainPassword) {
+      throw new BadRequestException('Se requiere contraseña en el registro');
+    }
+
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+    user = await this.userService.createUser({
+      email,
+      passwordHash,
+    });
+  }
+
+  // Evitar re-enviar si ya hay un OTP vigente
+  const existing = await this.otpRepo.findOne({
+    where: { email, used: false },
+    order: { createdAt: 'DESC' },
+  });
+  if (existing && existing.expiresAt > new Date()) {
+    throw new BadRequestException({
+      code: 'OTP_ALREADY_SENT',
+      message: 'Ya se envió un OTP vigente. Revisá tu correo.',
+    });
+  }
+
+  const code = this.generateOtp(6);
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + this.ttlMinutes * 60_000);
+
+  await this.otpRepo.save(
+    this.otpRepo.create({
+      email,
+      codeHash,
+      expiresAt,
+      used: false,
+      attempts: 0,
+      user: { id: user!.id } as any,
+    }),
+  );
+
+  await this.emailService.sendOtp(email, code, this.ttlMinutes);
+  return { success: true };
+}
 
   async verifyOtp(emailRaw: string, code: string) {
     const email = this.normalizeEmail(emailRaw);
@@ -120,5 +133,27 @@ export class AuthService {
       user: { id: user.id, email: user.email, name: (user as any).name ?? null },
     };
     
+  }
+
+    async login(emailRaw: string, password: string) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email || !password) throw new BadRequestException('Email y password requeridos');
+
+    const user = await this.userService.getUserByEmail(email);
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    // asegurate de que tu User tenga passwordHash
+    const ok = user.passwordHash && (await bcrypt.compare(password, user.passwordHash));
+    if (!ok) throw new UnauthorizedException('Credenciales inválidas');
+
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = await this.jwt.signAsync(payload, {
+      expiresIn: process.env.JWT_EXPIRES || '7d',
+    });
+
+    return {
+      accessToken,
+      user: { id: user.id, email: user.email, name: (user as any).name ?? null },
+    };
   }
 }

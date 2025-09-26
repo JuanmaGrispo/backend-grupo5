@@ -14,7 +14,7 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.OK)
   async startRegister(@Body() dto: LoginRequestDto) {
-    await this.auth.startOtp(dto.email, 'register'); // 👈 acá va 'register'
+    await this.auth.startOtp(dto.email, 'register', dto.password); // 👈 acá va 'register'
     return { success: true, message: 'OTP enviado para registro' };
   }
 
@@ -31,8 +31,8 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async startLogin(@Body() dto: LoginRequestDto) {
-    await this.auth.startOtp(dto.email, 'login'); // 👈 acá va 'login'
-    return { success: true, message: 'OTP enviado para login' };
+    const {accessToken, user} = await this.auth.login(dto.email, dto.password);
+    return {accessToken, user};
   }
 
   @Public()

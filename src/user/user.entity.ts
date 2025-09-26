@@ -1,4 +1,11 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('users')
 export class User {
@@ -14,6 +21,10 @@ export class User {
 
   @Column({ nullable: true })
   photoUrl?: string;
+
+  // 👉 campo para guardar contraseña hasheada
+  @Column({ nullable: true })
+  passwordHash?: string;
 
   @Column({ default: true })
   isActive: boolean;

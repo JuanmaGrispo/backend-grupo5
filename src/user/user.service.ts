@@ -26,7 +26,7 @@ export class UserService {
     const exists = await this.getUserByEmail(normEmail);
     if (exists) throw new BadRequestException('El email ya está registrado');
 
-    const user = this.userRepo.create({ email: normEmail, name: dto.name });
+    const user = this.userRepo.create({ email: normEmail, name: dto.name, passwordHash: dto.passwordHash });
     return this.userRepo.save(user);
   }
   async getById(id: string): Promise<User> {
