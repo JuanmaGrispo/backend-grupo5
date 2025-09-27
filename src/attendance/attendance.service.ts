@@ -33,6 +33,7 @@ export class AttendanceService {
     const start = new Date(session.startAt);
     const before = new Date(start.getTime() - 15 * 60_000);
     const after = new Date(start.getTime() + 60 * 60_000);
+    
     if (now < before || now > after) {
       throw new BadRequestException('Fuera de ventana de check-in');
     }
@@ -49,7 +50,10 @@ export class AttendanceService {
     });
     if (existing) return existing;
 
-    const att = this.attendanceRepo.create({ user, session });
+    const att = this.attendanceRepo.create({ 
+      user: { id: user.id } as any, 
+      session: { id: session.id } as any 
+    });
     return this.attendanceRepo.save(att);
   }
 
