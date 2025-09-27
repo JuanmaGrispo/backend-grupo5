@@ -1,0 +1,8 @@
+{"title": "Spinning: Power Ride", "description": "Indoor cycling class focused on high-intensity interval training and hill climbs.", "discipline": "Spinning", "defaultDurationMin": 45, "defaultCapacity": 25}
+{"title": "Yoga: Vinyasa Flow", "description": "A dynamic, continuous sequence of poses linked with breath.", "discipline": "Yoga", "defaultDurationMin": 60, "defaultCapacity": 20}
+{"title": "Funcional 2", "description": "Entrenamiento funcional full body, centrado en movimientos cotidianos.", "discipline": "Funcional", "defaultDurationMin": 60, "defaultCapacity": 20}
+{"title": "CrossFit WOD: Metcon", "description": "Workout of the Day focused on high-intensity metabolic conditioning.", "discipline": "Crossfit", "defaultDurationMin": 50, "defaultCapacity": 15}
+{"title": "Pilates: Core Reform", "description": "Low-impact class focused on core strength, posture, and flexibility using mats.", "discipline": "Pilates", "defaultDurationMin": 55, "defaultCapacity": 18}
+{"title": "HIIT: Total Body Burn", "description": "High-Intensity Interval Training alternating short bursts of intense exercise with quick recovery periods.", "discipline": "HIIT", "defaultDurationMin": 30, "defaultCapacity": 30}
+{"title": "Zumba Gold", "description": "Dance fitness party featuring Latin rhythms, tailored for lower impact and all ages.", "discipline": "Dance", "defaultDurationMin": 50, "defaultCapacity": 40}
+{"title": "Barre: Sculpt & Tone", "description": "Ballet-inspired low-impact workout combining Pilates, yoga, and strength training.", "discipline": "Barre", "defaultDurationMin": 45, "defaultCapacity": 12}
