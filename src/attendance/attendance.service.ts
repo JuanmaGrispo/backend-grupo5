@@ -20,7 +20,7 @@ export class AttendanceService {
     @InjectRepository(Reservation) private readonly reservationRepo: Repository<Reservation>,
   ) { }
 
-  async checkin(user: User, sessionId: string): Promise<Attendance> {
+  async checkin(user: any, sessionId: string): Promise<Attendance> {
     const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Sesión no encontrada');
 
@@ -38,23 +38,40 @@ export class AttendanceService {
       throw new BadRequestException('Fuera de ventana de check-in');
     }
 
+    const userId = user.sub || user.id;
     const reservation = await this.reservationRepo.findOne({
-      where: { user: { id: user.id }, session: { id: sessionId }, status: ReservationStatus.CONFIRMED },
+      where: { user: { id: userId }, session: { id: sessionId }, status: ReservationStatus.CONFIRMED },
     });
     if (!reservation) {
       throw new UnauthorizedException('No tenés una reserva confirmada para esta sesión');
     }
 
     const existing = await this.attendanceRepo.findOne({
-      where: { user: { id: user.id }, session: { id: sessionId } },
+      where: { user: { id: userId }, session: { id: sessionId } },
     });
     if (existing) return existing;
+    
+    // Debug logging
+    console.log('=== CREATING ATTENDANCE ===');
+    console.log('User ID from JWT sub:', userId);
+    console.log('Session ID:', session.id);
+    console.log('User object:', user);
+    console.log('Session object:', session);
 
-    const att = this.attendanceRepo.create({ 
-      user: { id: user.id } as any, 
-      session: { id: session.id } as any 
-    });
-    return this.attendanceRepo.save(att);
+    try {
+      const att = this.attendanceRepo.create({ 
+        user: { id: userId } as any, 
+        session: { id: session.id } as any 
+      });
+      console.log('Created attendance object:', att);
+      
+      const saved = await this.attendanceRepo.save(att);
+      console.log('Saved attendance:', saved);
+      return saved;
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      throw error;
+    }
   }
 
   async myHistory(userId: string) {
