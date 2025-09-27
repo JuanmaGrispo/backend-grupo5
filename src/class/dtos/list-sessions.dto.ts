@@ -23,6 +23,16 @@ export class ListSessionsQuery {
   })
   day?: string;
 
+  // Rango de fechas: desde (UTC) - formato YYYY-MM-DD
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  // Rango de fechas: hasta (UTC) - formato YYYY-MM-DD
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
   // Paginación
   @IsOptional()
   @Type(() => Number)

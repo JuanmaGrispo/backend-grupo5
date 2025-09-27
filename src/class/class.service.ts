@@ -175,6 +175,18 @@ async listSessions(q: ListSessionsQuery) {
     qb.andWhere('s.startAt >= :from AND s.startAt < :to', { from, to });
   }
 
+  // rango de fechas UTC
+  if (q.from || q.to) {
+    if (q.from) {
+      const fromDate = new Date(`${q.from}T00:00:00.000Z`);
+      qb.andWhere('s.startAt >= :fromDate', { fromDate });
+    }
+    if (q.to) {
+      const toDate = new Date(`${q.to}T23:59:59.999Z`);
+      qb.andWhere('s.startAt <= :toDate', { toDate });
+    }
+  }
+
   qb.skip((page - 1) * pageSize).take(pageSize);
 
   const [items, total] = await qb.getManyAndCount();
