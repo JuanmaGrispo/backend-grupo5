@@ -40,7 +40,8 @@ export class AttendanceService {
     const userId = this.getUserId(principal);
     if (!userId) throw new UnauthorizedException('Usuario no identificado');
 
-    // 1) Sesión
+  async checkin(user: any, sessionId: string): Promise<Attendance> {
+
     const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Sesión no encontrada');
 
@@ -49,7 +50,19 @@ export class AttendanceService {
       throw new BadRequestException('La sesión no admite check-in');
     }
 
-    // 3) Reserva confirmada
+
+    // Ventana horaria
+    const now = new Date();
+    const start = new Date(session.startAt);
+    const before = new Date(start.getTime() - 15 * 60_000);
+    const after = new Date(start.getTime() + 60 * 60_000);
+    
+    if (now < before || now > after) {
+      throw new BadRequestException('Fuera de ventana de check-in');
+    }
+
+    const userId = user.sub || user.id;
+
     const reservation = await this.reservationRepo.findOne({
       where: { user: { id: userId }, session: { id: sessionId }, status: ReservationStatus.CONFIRMED },
     });
@@ -62,13 +75,29 @@ export class AttendanceService {
       where: { user: { id: userId }, session: { id: sessionId } },
     });
     if (existing) return existing;
+    
+    // Debug logging
+    console.log('=== CREATING ATTENDANCE ===');
+    console.log('User ID from JWT sub:', userId);
+    console.log('Session ID:', session.id);
+    console.log('User object:', user);
+    console.log('Session object:', session);
 
-    // 5) Crear attendance seteando FKs por id explícito
-    const att = this.attendanceRepo.create({
-      user: { id: userId } as User,
-      session: { id: sessionId } as ClassSession,
-    });
-    return this.attendanceRepo.save(att);
+    try {
+      const att = this.attendanceRepo.create({ 
+        user: { id: userId } as any, 
+        session: { id: session.id } as any 
+      });
+      console.log('Created attendance object:', att);
+      
+      const saved = await this.attendanceRepo.save(att);
+      console.log('Saved attendance:', saved);
+      return saved;
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      throw error;
+    }
+
   }
 
   async myHistory(userId: string) {
