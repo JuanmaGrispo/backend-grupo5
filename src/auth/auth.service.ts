@@ -11,6 +11,7 @@ import { UserService } from 'src/user/user.service';
 import { UserOtp } from './user-otp.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EmailService } from 'src/email/email.service'; // 👈 vuelve
 
 type OtpMode = 'login' | 'register' | 'auto';
 
@@ -22,6 +23,7 @@ export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly userService: UserService,
+    private readonly emailService: EmailService,         // 👈 vuelve
     @InjectRepository(UserOtp) private readonly otpRepo: Repository<UserOtp>,
   ) {}
 
@@ -40,8 +42,7 @@ export class AuthService {
     const email = this.normalizeEmail(emailRaw);
     if (!email || !password) throw new BadRequestException('Email y password requeridos');
 
-    // trae passwordHash explícitamente
-    const user = await this.userService.getUserForAuth(email);
+    const user = await this.userService.getUserForAuth(email); // trae passwordHash
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     if (!user.passwordHash) throw new UnauthorizedException('Usuario sin password configurado');
@@ -59,7 +60,7 @@ export class AuthService {
     };
   }
 
-  // ===== Inicio de OTP genérico (usado por register/login) =====
+  // ===== Inicio de OTP (login/register/auto) =====
   async startOtp(emailRaw: string, mode: OtpMode = 'auto', plainPassword?: string) {
     const email = this.normalizeEmail(emailRaw);
     if (!email) throw new BadRequestException('Email requerido');
@@ -71,23 +72,20 @@ export class AuthService {
     }
 
     if ((mode === 'register' || mode === 'auto') && !user) {
-      if (!plainPassword) {
-        throw new BadRequestException('Se requiere contraseña en el registro');
-      }
+      if (!plainPassword) throw new BadRequestException('Se requiere contraseña en el registro');
       const passwordHash = await bcrypt.hash(plainPassword, 10);
       user = await this.userService.createUser({ email, passwordHash });
     }
 
-    // evitar re-enviar si hay OTP vigente
+    // Si ya hay un OTP vigente, en lugar de tirar error podés reutilizarlo (opcional)
     const existing = await this.otpRepo.findOne({
       where: { email, used: false },
       order: { createdAt: 'DESC' },
     });
     if (existing && existing.expiresAt > new Date()) {
-      throw new BadRequestException({
-        code: 'OTP_ALREADY_SENT',
-        message: 'Ya se envió un OTP vigente. Revisá tu correo.',
-      });
+      // Enviar de nuevo la notificación del mismo código NO es posible (no lo tenemos en claro).
+      // Mejor generar uno nuevo y marcar el anterior como usado para evitar confusión:
+      await this.otpRepo.update(existing.id, { used: true });
     }
 
     const code = this.generateOtp(6);
@@ -105,13 +103,18 @@ export class AuthService {
       }),
     );
 
-    // si querés enviar por email, llamá acá a tu EmailService
-    // await this.emailService.sendOtp(email, code, this.ttlMinutes);
+    // 👇 Enviar por email
+    await this.emailService.sendOtp(email, code, this.ttlMinutes);
 
-    return { success: true };
+    // 👇 En DEV podés retornar el código para pruebas rápidas
+    const devEcho =
+      process.env.NODE_ENV !== 'production' && process.env.AUTH_OTP_ECHO === '1'
+        ? { devOtp: code }
+        : {};
+
+    return { success: true, channel: 'email', ...devEcho };
   }
 
-  // Conveniencia para login OTP
   async startOtpLogin(emailRaw: string) {
     return this.startOtp(emailRaw, 'login');
   }
@@ -125,14 +128,10 @@ export class AuthService {
       where: { email, used: false },
       order: { createdAt: 'DESC' },
     });
-    if (!otp) {
-      throw new UnauthorizedException({ code: 'OTP_INVALID', message: 'No hay OTP activo' });
-    }
-
+    if (!otp) throw new UnauthorizedException({ code: 'OTP_INVALID', message: 'No hay OTP activo' });
     if (otp.expiresAt <= new Date()) {
       throw new UnauthorizedException({ code: 'OTP_EXPIRED', message: 'El OTP venció' });
     }
-
     if (otp.attempts >= this.maxAttempts) {
       throw new UnauthorizedException({ code: 'OTP_LOCKED', message: 'Se alcanzó el límite de intentos' });
     }
