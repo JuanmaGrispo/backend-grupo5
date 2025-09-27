@@ -13,7 +13,13 @@ import { ListSessionsQuery } from './dtos/list-sessions.dto';
 export class ClassController {
   constructor(private readonly svc: ClassService) {}
 
-  // ------- Clases (ABM)
+  // ------- Sesiones globales (con filtros por branchId, classRefId, day)
+  @Get('sessions')
+  listSessions(@Query() q: ListSessionsQuery) {
+    return this.svc.listSessions(q);
+  }
+
+  // ------- ABM de clases
   @Post()
   createClass(@Body() dto: CreateClassDto) {
     return this.svc.createClass(dto);
@@ -40,51 +46,9 @@ export class ClassController {
     return this.svc.deleteClass(id);
   }
 
-  // ------- Sesiones (anidadas por clase)
+  // ------- Sesiones anidadas a una clase específica
   @Post(':classId/sessions')
   scheduleForClass(@Param('classId') classId: string, @Body() dto: ScheduleSessionDto) {
     return this.svc.scheduleSession({ ...dto, classId });
-  }
-
-  @Get(':classId/sessions')
-  listSessionsByClass(@Param('classId') classRefId: string, @Query() q: ListSessionsQuery) {
-    return this.svc.listSessions({ ...q, classRefId });
-  }
-
-  // ------- Sesiones (globales)
-  @Get('sessions') // Filtrar por sede, disciplina y fecha
-  listSessions(@Query() q: ListSessionsQuery) {
-    return this.svc.listSessions(q);
-  }
-
-  @Get('sessions/:id')
-  getSession(@Param('id') id: string) {
-    return this.svc.getSession(id);
-  }
-
-  @Patch('sessions/:id')
-  updateSession(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
-    return this.svc.updateSession(id, dto);
-  }
-
-  @Patch('sessions/:id/start')
-  startSession(@Param('id') id: string) {
-    return this.svc.startSession(id);
-  }
-
-  @Patch('sessions/:id/complete')
-  completeSession(@Param('id') id: string) {
-    return this.svc.completeSession(id);
-  }
-
-  @Patch('sessions/:id/cancel')
-  cancelSession(@Param('id') id: string) {
-    return this.svc.cancelSession(id, 'Canceled by admin');
-  }
-
-  @Delete('sessions/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  deleteSession(@Param('id') id: string) {
-    return this.svc.deleteSession(id);
   }
 }
