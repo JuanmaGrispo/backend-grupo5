@@ -44,6 +44,12 @@ export class UserService {
     return this.userRepo.save(user);
   }
 
+  async updatePhotoUrl(userId: string, photoUrl: string): Promise<User> {
+    const user = await this.getById(userId);
+    user.photoUrl = photoUrl;
+    return this.userRepo.save(user);
+  }
+
 
 // Trae también passwordHash
 async getUserForAuth(email: string) {
