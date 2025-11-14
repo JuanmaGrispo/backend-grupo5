@@ -3,11 +3,18 @@ import { AppModule } from './app.module'; // Módulo raíz
 import { ValidationPipe, VersioningType, Logger } from '@nestjs/common'; // Utilidades globales
 import helmet from 'helmet' // Seguridad HTTP (cabeceras)
 import compression from 'compression'; // Comprimir respuestas (gzip/br)
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const logger = new Logger('Bootstrap');
+
+  // Servir archivos estáticos desde la carpeta uploads
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads',
+  });
 
   app.setGlobalPrefix('api'); // Prefijo /app. en routes
 
