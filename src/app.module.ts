@@ -13,6 +13,7 @@ import { ReservationModule } from './reservation/reservation.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { QrModule } from './qr/qr.module';
 import { BranchModule } from './branch/branch.module';
+import { NewsModule } from './news/news.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BranchModule } from './branch/branch.module';
     AttendanceModule,
     QrModule,
     BranchModule,
+    NewsModule,
   ],
   controllers: [AppController, NotifierController],
   providers: [AppService],
