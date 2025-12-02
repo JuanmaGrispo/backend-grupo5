@@ -10,4 +10,13 @@ export class BranchController {
   getAll(): Promise<Branch[]> {
     return this.branchService.getAll();
   }
+
+  // NUEVO ENDPOINT para la dirección fija
+  @Get('main')
+  getMainBranch() {
+    return {
+      name: 'UADE',
+      location: 'Lima 775, CABA',
+    };
+  }
 }
