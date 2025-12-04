@@ -8,8 +8,7 @@ SESSIONS_ENDPOINT = "http://localhost:3000/api/v1/classes/sessions"
 RESERVATIONS_ENDPOINT = "http://localhost:3000/api/v1/reservations"
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YjY1M2JmYi00YmU4LTQ3YjUtODIyNC0yNzNhNzAyNmE1YWEiLCJlbWFpbCI6Im1hdGljYWxsZXNAZ21haWwuY29tIiwiaWF0IjoxNzYzMDY0NDUzLCJleHAiOjE3NjM2NjkyNTN9.1Nja-Y18XBTA5y7arYZqozzFXAABlSs-dDjyKSuZZgU"
-    # "Authorization": "Bearer YOUR_AUTH_TOKEN"
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNDk1YmZjZC1hNTIyLTRjYmMtOTQ1MC1lZWQ0Mzg2ZGVkYjgiLCJlbWFpbCI6Im1lemhlcmc0M0BnbWFpbC5jb20iLCJpYXQiOjE3NjQ4MTUwOTQsImV4cCI6MTc2NTQxOTg5NH0.K-KNr40u3U8kkopPB4rn2ftrmwmmuLG-fdL-ioyGW7s"
 }
 REQUEST_DELAY_SECONDS = 0.3  # Add a delay to avoid overwhelming the server
 # ---------------------
