@@ -12,6 +12,31 @@ export class CheckinController {
   async checkinQr(@Body('sessionId') sessionId: string, @Req() req) {
     const user = req.user; // viene del token JWT
     const att = await this.attendanceSvc.checkin(user, sessionId);
-    return { success: true, attendance: att };
+    
+    // Retornar datos completos para confirmación en frontend
+    return {
+      success: true,
+      attendance: {
+        id: att.id,
+        createdAt: att.createdAt,
+        session: {
+          id: att.session.id,
+          startAt: att.session.startAt,
+          endAt: att.session.endAt,
+          status: att.session.status,
+          class: {
+            id: att.session.classRef.id,
+            title: att.session.classRef.title,
+            discipline: att.session.classRef.discipline,
+            instructorName: att.session.classRef.instructorName,
+          },
+          branch: att.session.branch ? {
+            id: att.session.branch.id,
+            name: att.session.branch.name,
+            location: att.session.branch.location,
+          } : null,
+        },
+      },
+    };
   }
 }

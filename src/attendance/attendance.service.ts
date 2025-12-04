@@ -21,7 +21,11 @@ export class AttendanceService {
   ) {}
 
   async checkin(user: any, sessionId: string): Promise<Attendance> {
-    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
+    // Obtener sesión con relaciones para validaciones y respuesta
+    const session = await this.sessionRepo.findOne({ 
+      where: { id: sessionId },
+      relations: { classRef: true, branch: true },
+    });
     if (!session) throw new NotFoundException('Sesión no encontrada');
 
     if (![ClassSessionStatus.SCHEDULED, ClassSessionStatus.IN_PROGRESS].includes(session.status)) {
@@ -49,6 +53,7 @@ export class AttendanceService {
 
     const existing = await this.attendanceRepo.findOne({
       where: { user: { id: userId }, session: { id: sessionId } },
+      relations: { session: { classRef: true, branch: true } },
     });
     if (existing) return existing;
     
@@ -67,8 +72,13 @@ export class AttendanceService {
       console.log('Created attendance object:', att);
       
       const saved = await this.attendanceRepo.save(att);
-      console.log('Saved attendance:', saved);
-      return saved;
+      // Cargar relaciones para la respuesta
+      const savedWithRelations = await this.attendanceRepo.findOne({
+        where: { id: saved.id },
+        relations: { session: { classRef: true, branch: true } },
+      });
+      console.log('Saved attendance:', savedWithRelations);
+      return savedWithRelations || saved;
     } catch (error) {
       console.error('Error saving attendance:', error);
       throw error;
