@@ -127,12 +127,18 @@ export class ClassService {
     const updatedSession = await this.sessionRepo.save(ctx.getAggregate());
 
     // Si se reprogramó la sesión, actualizar las reservas y crear notificaciones
-    if (wasRescheduled && oldStartAt) {
+    if (wasRescheduled && oldStartAt && newStartAt) {
       this.logger.log(`Session ${sessionId} was rescheduled. Updating reservations and sending notifications.`);
+      
       // Actualizar todas las reservas de la sesión (actualiza el updatedAt)
       await this.reservationService.updateAllBySession(sessionId);
-      // Crear notificaciones para todos los usuarios con reservas
+      
+      // Crear notificaciones de reprogramación para todos los usuarios con reservas
       await this.notifierService.notifySessionRescheduled(sessionId, oldStartAt);
+      
+      // Si la nueva fecha está en la ventana de 1 hora (58-62 minutos), también crear notificación de recordatorio
+      // Esto asegura que se notifiquen AMBAS cosas: reprogramación + recordatorio
+      await this.notifierService.notifyReminderForSession(sessionId);
     }
 
     return updatedSession;
