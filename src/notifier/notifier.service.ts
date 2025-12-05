@@ -20,18 +20,9 @@ export class NotifierService {
 
   /**
    * Obtiene las notificaciones no leídas de un usuario
-   * También procesa recordatorios de sesiones que empiezan en 1 hora
-   * y notificaciones pendientes para sesiones canceladas
+   * NO procesa automáticamente - todo se maneja por endpoints
    */
   async getUnreadNotifications(userId: string): Promise<Notification[]> {
-    // Procesar recordatorios antes de devolver las notificaciones
-    await this.processReminderNotifications();
-    
-    // Procesar notificaciones pendientes para sesiones canceladas
-    await this.processPendingCancelNotifications();
-
-    // Usar find() de TypeORM que maneja automáticamente los nombres de columnas
-    // Filtrar notificaciones no leídas y no eliminadas (soft delete)
     return this.notificationRepo.find({
       where: {
         user: { id: userId },
@@ -45,16 +36,9 @@ export class NotifierService {
 
   /**
    * Obtiene todas las notificaciones de un usuario (leídas y no leídas)
-   * También procesa recordatorios de sesiones que empiezan en 1 hora
-   * y notificaciones pendientes para sesiones canceladas
+   * NO procesa automáticamente - todo se maneja por endpoints
    */
   async getAllNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
-    // Procesar recordatorios antes de devolver las notificaciones
-    await this.processReminderNotifications();
-    
-    // Procesar notificaciones pendientes para sesiones canceladas
-    await this.processPendingCancelNotifications();
-
     return this.notificationRepo.find({
       where: {
         user: { id: userId },
@@ -303,23 +287,18 @@ export class NotifierService {
     const now = new Date();
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
 
-    // Buscar sesiones que empiezan en aproximadamente 1 hora (con un margen de 5 minutos)
-    // IMPORTANTE: Solo buscar sesiones del mismo día o máximo 1 hora en el futuro
-    const fiveMinutesBefore = new Date(oneHourFromNow.getTime() - 5 * 60 * 1000);
-    const fiveMinutesAfter = new Date(oneHourFromNow.getTime() + 5 * 60 * 1000);
-
-    // Buscar sesiones que empiezan en aproximadamente 1 hora
-    // IMPORTANTE: Solo del mismo día para evitar notificar sesiones de días diferentes
+    // Buscar sesiones que empiezan en menos de 60 minutos (desde ahora hasta 60 minutos)
+    // IMPORTANTE: Solo buscar sesiones del mismo día
     const sessions = await this.sessionRepo.find({
       where: {
         status: ClassSessionStatus.SCHEDULED,
-        startAt: Between(fiveMinutesBefore, fiveMinutesAfter),
+        startAt: Between(now, oneHourFromNow), // Desde ahora hasta 60 minutos
       },
       relations: ['classRef', 'branch'],
     });
 
     // Filtrar adicionalmente para asegurar que:
-    // 1. Están en el rango de tiempo correcto (55-65 minutos desde ahora)
+    // 1. Están en menos de 60 minutos desde ahora
     // 2. Son del MISMO DÍA (no de días diferentes)
     // 3. La sesión está en el FUTURO (no ha pasado)
     const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -336,16 +315,14 @@ export class NotifierService {
         return false;
       }
       
-      // Solo sesiones que empiezan entre 58 minutos y 62 minutos desde ahora
-      // Rango más estricto para evitar múltiples notificaciones
-      const minTime = 58 * 60 * 1000; // 58 minutos
-      const maxTime = 62 * 60 * 1000; // 62 minutos
+      // Notificar cuando falte menos de 60 minutos (desde 0 hasta 60 minutos)
+      const maxTime = 60 * 60 * 1000; // 60 minutos
       
-      const isInTimeRange = timeDiff >= minTime && timeDiff <= maxTime;
+      const isInTimeRange = timeDiff <= maxTime;
       
       if (!isInTimeRange) {
         this.logger.debug(
-          `Skipping session ${session.id}: outside time range. Time diff: ${Math.round(timeDiff / 60000)} minutes`
+          `Skipping session ${session.id}: more than 60 minutes away. Time diff: ${Math.round(timeDiff / 60000)} minutes`
         );
       }
       
@@ -504,6 +481,105 @@ export class NotifierService {
     }
 
     return processed;
+  }
+
+  /**
+   * Verifica si una sesión está en la ventana de 1 hora (58-62 minutos antes)
+   * Helper para determinar si se debe crear notificación de recordatorio
+   */
+  private isWithinReminderWindow(sessionStartAt: Date): boolean {
+    const now = new Date();
+    const sessionTime = new Date(sessionStartAt);
+    const timeDiff = sessionTime.getTime() - now.getTime();
+    
+    // Solo sesiones que están en el FUTURO (no han pasado)
+    if (timeDiff <= 0) {
+      return false;
+    }
+    
+    // Notificar cuando falte menos de 60 minutos (desde 0 hasta 60 minutos)
+    const maxTime = 60 * 60 * 1000; // 60 minutos
+    
+    const isInTimeRange = timeDiff <= maxTime;
+    
+    // Verificar que sea del MISMO DÍA (no de días diferentes)
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const sessionDay = new Date(sessionTime.getFullYear(), sessionTime.getMonth(), sessionTime.getDate());
+    const isSameDay = sessionDay.getTime() === nowDay.getTime();
+    
+    return isInTimeRange && isSameDay;
+  }
+
+  /**
+   * Crea notificaciones de recordatorio para una sesión específica
+   * Se usa cuando se reprograma una sesión a menos de 1 hora
+   */
+  async notifyReminderForSession(sessionId: string): Promise<void> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      relations: ['classRef', 'branch'],
+    });
+
+    if (!session) return;
+    
+    // Verificar que esté en la ventana de recordatorio
+    if (!this.isWithinReminderWindow(session.startAt)) {
+      this.logger.debug(`Session ${sessionId} is not within reminder window, skipping reminder notification`);
+      return;
+    }
+
+    // Solo sesiones SCHEDULED
+    if (session.status !== ClassSessionStatus.SCHEDULED) {
+      this.logger.debug(`Session ${sessionId} is not SCHEDULED, skipping reminder notification`);
+      return;
+    }
+
+    const reservations = await this.reservationRepo.find({
+      where: {
+        session: { id: sessionId },
+        status: ReservationStatus.CONFIRMED,
+      },
+      relations: ['user'],
+    });
+
+    if (reservations.length === 0) {
+      return;
+    }
+
+    // Verificar qué usuarios ya tienen notificaciones de recordatorio (incluyendo eliminadas)
+    const existingNotifications = await this.notificationRepo.find({
+      where: {
+        session: { id: sessionId },
+        type: NotificationType.SESSION_REMINDER,
+      },
+      relations: ['user'],
+      withDeleted: true, // Incluir eliminadas para evitar recrearlas
+    });
+
+    const usersWithNotifications = new Set(
+      existingNotifications.map((n) => n.user.id)
+    );
+
+    // Crear notificaciones solo para usuarios que no tienen una ya
+    const notificationsToCreate = reservations
+      .filter((reservation) => !usersWithNotifications.has(reservation.user.id))
+      .map((reservation) =>
+        this.notificationRepo.create({
+          user: reservation.user,
+          session: session,
+          type: NotificationType.SESSION_REMINDER,
+          title: `Recordatorio: ${session.classRef.title}`,
+          body: `Falta menos de una hora para tu sesión (${this.formatDate(session.startAt)}).`,
+          read: false,
+        }),
+      );
+
+    if (notificationsToCreate.length > 0) {
+      await this.notificationRepo.save(notificationsToCreate);
+      this.logger.log(
+        `Created ${notificationsToCreate.length} reminder notifications for rescheduled session ${sessionId}`
+      );
+    }
   }
 
   private formatDate(date: Date): string {

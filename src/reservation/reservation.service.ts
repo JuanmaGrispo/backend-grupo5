@@ -27,10 +27,29 @@ export class ReservationService {
       if (s.status !== ClassSessionStatus.SCHEDULED) throw new BadRequestException('Sesión no reservable');
       if (s.startAt <= new Date()) throw new BadRequestException('Sesión pasada');
 
-      const dup = await reservations.findOne({
-        where: { user: { id: userId }, session: { id: sessionId }, status: ReservationStatus.CONFIRMED },
+      // Verificar si el usuario ya tiene una reserva confirmada en esta sesión
+      const existingReservation = await reservations.findOne({
+        where: { 
+          user: { id: userId }, 
+          session: { id: sessionId }, 
+          status: ReservationStatus.CONFIRMED 
+        },
+        relations: ['session', 'session.classRef'],
       });
-      if (dup) throw new BadRequestException('Ya tenés reserva confirmada');
+      
+      if (existingReservation) {
+        const className = existingReservation.session?.classRef?.title || 'esta clase';
+        const sessionDate = existingReservation.session?.startAt 
+          ? new Intl.DateTimeFormat('es-AR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            }).format(new Date(existingReservation.session.startAt))
+          : 'esta sesión';
+        
+        throw new BadRequestException(
+          `Ya estás inscrito en ${className} para el ${sessionDate}. No puedes reservar la misma sesión dos veces.`
+        );
+      }
 
       if (s.reservedCount >= s.capacity) throw new BadRequestException('Sin cupo');
 
