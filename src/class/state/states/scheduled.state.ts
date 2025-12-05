@@ -1,10 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ClassSession, ClassSessionStatus } from '../../class-session.entity';
 import { ISessionState, UpdateData } from '../session-state';
 import { ReservationsPort } from '../session-context';
 
 export class ScheduledState implements ISessionState {
   name = 'SCHEDULED';
+  private readonly logger = new Logger(ScheduledState.name);
 
   constructor(
     private session: ClassSession,
@@ -26,9 +27,14 @@ export class ScheduledState implements ISessionState {
   }
 
   async cancel(reason?: string): Promise<void> {
+    this.logger.log(`Canceling scheduled session ${this.session.id}. Reason: ${reason || 'No reason provided'}`);
     this.session.status = ClassSessionStatus.CANCELED;
     if (this.deps?.reservations) {
+      this.logger.debug(`Calling cancelAllBySession for session ${this.session.id}`);
       await this.deps.reservations.cancelAllBySession(this.session.id, reason || 'Class canceled');
+      this.logger.debug(`cancelAllBySession completed for session ${this.session.id}`);
+    } else {
+      this.logger.warn(`No reservations port available for session ${this.session.id}. Reservations will not be canceled.`);
     }
   }
 

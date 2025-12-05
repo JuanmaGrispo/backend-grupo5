@@ -8,6 +8,8 @@ import { UpdateClassDto } from './dtos/update-class.dto';
 import { ScheduleSessionDto } from './dtos/schedule-session.dto';
 import { UpdateSessionDto } from './dtos/update-session.dto';
 import { ListSessionsQuery } from './dtos/list-sessions.dto';
+import { CancelSessionDto } from './dtos/cancel-session.dto';
+import { Public } from '../auth/public.decorator';
 
 @Controller('classes')
 export class ClassController {
@@ -50,5 +52,29 @@ export class ClassController {
   @Post(':classId/sessions')
   scheduleForClass(@Param('classId') classId: string, @Body() dto: ScheduleSessionDto) {
     return this.svc.scheduleSession({ ...dto, classId });
+  }
+
+  // ------- Gestión de sesiones individuales
+  @Patch('sessions/:sessionId')
+  updateSession(@Param('sessionId') sessionId: string, @Body() dto: UpdateSessionDto) {
+    return this.svc.updateSession(sessionId, dto);
+  }
+
+  @Post('sessions/:sessionId/cancel')
+  cancelSession(@Param('sessionId') sessionId: string, @Body() dto: CancelSessionDto) {
+    return this.svc.cancelSession(sessionId, dto.reason);
+  }
+
+  @Get('sessions/:sessionId')
+  getSession(@Param('sessionId') sessionId: string) {
+    return this.svc.getSession(sessionId);
+  }
+
+  // ------- Endpoint público para cancelar sesiones (sin token)
+  // Útil para testing desde Postman o cuando se cancela desde la DB
+  @Public()
+  @Post('sessions/:sessionId/cancel-public')
+  cancelSessionPublic(@Param('sessionId') sessionId: string, @Body() dto: CancelSessionDto) {
+    return this.svc.cancelSession(sessionId, dto.reason);
   }
 }
