@@ -1,0 +1,120 @@
+==========================================
+  INSTRUCCIONES PARA EJECUTAR EL BACKEND
+==========================================
+
+COMANDO PRINCIPAL:
+------------------
+npm run start:dev
+
+Este comando:
+- Compila TypeScript automáticamente
+- Inicia el servidor en modo watch (recarga automática)
+- Escucha en el puerto configurado (default: 3000 o 9100 según .env)
+
+==========================================
+
+PASOS ANTES DE EJECUTAR:
+------------------------
+
+1. INSTALAR DEPENDENCIAS (si no lo has hecho):
+   npm install
+
+2. LEVANTAR LA BASE DE DATOS (PostgreSQL):
+   docker-compose up -d
+   
+   Esto levanta PostgreSQL en el puerto 5432 con:
+   - Database: ritmofit
+   - User: postgres
+   - Password: postgres
+
+3. CONFIGURAR VARIABLES DE ENTORNO:
+   Crear archivo .env en la raíz del proyecto con:
+   
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_USER=postgres
+   DB_PASS=postgres
+   DB_NAME=ritmofit
+   DB_SSL=false
+   
+   PORT=3000
+   HOST=0.0.0.0
+   
+   JWT_SECRET=tu-secreto-jwt-super-seguro-aqui
+   JWT_EXPIRES_IN=7d
+   
+   FRONTEND_ORIGIN=http://localhost:3001,http://localhost:4200
+
+==========================================
+
+COMANDOS DISPONIBLES:
+---------------------
+
+Desarrollo (con hot-reload):
+  npm run start:dev
+
+Producción:
+  npm run build
+  npm run start:prod
+
+Modo normal (sin watch):
+  npm run start
+
+Linting:
+  npm run lint
+
+Tests:
+  npm run test
+  npm run test:e2e
+
+==========================================
+
+VERIFICACIÓN:
+-------------
+
+Una vez ejecutado, deberías ver:
+  [Nest] LOG [NestFactory] Starting Nest application...
+  [Nest] LOG [InstanceLoader] ...
+  Ready on http://0.0.0.0:3000/api/v1
+
+El servidor estará disponible en:
+  http://localhost:3000/api/v1
+
+==========================================
+
+SCRIPTS DE PYTHON (OPCIONAL):
+------------------------------
+
+Para poblar datos de prueba:
+
+1. Crear clases:
+   python test/crearClases.py
+
+2. Crear sesiones:
+   python test/crearSesiones.py
+
+3. Crear reservas:
+   python test/crearReservas.py
+
+Nota: Asegúrate de tener instalado 'requests':
+  pip install requests
+
+==========================================
+
+TROUBLESHOOTING:
+----------------
+
+Si no se conecta a la base de datos:
+  - Verifica que Docker esté corriendo: docker ps
+  - Verifica que PostgreSQL esté activo: docker-compose ps
+  - Revisa las credenciales en .env
+
+Si el puerto está en uso:
+  - Cambia PORT en .env
+  - O mata el proceso que usa el puerto
+
+Si hay errores de compilación:
+  - Ejecuta: npm run build
+  - Revisa los errores de TypeScript
+
+==========================================
