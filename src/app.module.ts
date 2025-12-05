@@ -13,6 +13,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { QrModule } from './qr/qr.module';
 import { BranchModule } from './branch/branch.module';
 import { NewsModule } from './news/news.module';
+import { RatingModule } from './rating/rating.module';
 import { DatabaseModule } from './database/database.module';
 
 @Module({
@@ -46,6 +47,7 @@ import { DatabaseModule } from './database/database.module';
     QrModule,
     BranchModule,
     NewsModule,
+    RatingModule,
     DatabaseModule,
   ],
   controllers: [AppController],
