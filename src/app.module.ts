@@ -14,6 +14,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { QrModule } from './qr/qr.module';
 import { BranchModule } from './branch/branch.module';
 import { NewsModule } from './news/news.module';
+import { RatingModule } from './rating/rating.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { NewsModule } from './news/news.module';
     QrModule,
     BranchModule,
     NewsModule,
+    RatingModule,
   ],
   controllers: [AppController, NotifierController],
   providers: [AppService],
