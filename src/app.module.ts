@@ -7,13 +7,13 @@ import { UserModule } from './user/user.module';
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClassModule } from './class/class.module';
-import { NotifierController } from './notifier/notifier.controller';
 import { NotifierModule } from './notifier/notifier.module';
 import { ReservationModule } from './reservation/reservation.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { QrModule } from './qr/qr.module';
 import { BranchModule } from './branch/branch.module';
 import { NewsModule } from './news/news.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -31,7 +31,7 @@ import { NewsModule } from './news/news.module';
         ssl: cfg.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         autoLoadEntities: true,
         synchronize: true,     // <- habilitar en dev
-        logging: true         // log de queries (útil en dev)
+        logging: true,        // log de queries (útil en dev)
       }),
     }),
 
@@ -46,8 +46,9 @@ import { NewsModule } from './news/news.module';
     QrModule,
     BranchModule,
     NewsModule,
+    DatabaseModule,
   ],
-  controllers: [AppController, NotifierController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule { }

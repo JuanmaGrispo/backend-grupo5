@@ -1,5 +1,5 @@
 // src/classes/class.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -7,6 +7,8 @@ import { ClassEntity } from './class.entity';
 import { ClassSession, ClassSessionStatus } from './class-session.entity';
 import { SessionContext } from './state/session-context';
 import { UpdateData } from './state/session-state';
+import { ReservationService } from '../reservation/reservation.service';
+import { NotifierService } from '../notifier/notifier.service';
 
 // DTOs (ajustá paths si difieren)
 import { CreateClassDto } from './dtos/create-class.dto';
@@ -17,9 +19,14 @@ import { UpdateSessionDto } from './dtos/update-session.dto';
 
 @Injectable()
 export class ClassService {
+  private readonly logger = new Logger(ClassService.name);
+
   constructor(
     @InjectRepository(ClassEntity) private readonly classRepo: Repository<ClassEntity>,
     @InjectRepository(ClassSession) private readonly sessionRepo: Repository<ClassSession>,
+    private readonly reservationService: ReservationService,
+    @Inject(forwardRef(() => NotifierService))
+    private readonly notifierService: NotifierService,
   ) {}
 
   // ---------- ABM de ClassEntity ----------
@@ -89,23 +96,75 @@ export class ClassService {
     const s = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!s) throw new NotFoundException('Sesión no encontrada');
 
+    // Guardar la fecha anterior ANTES de actualizar
+    const oldStartAt = s.startAt ? new Date(s.startAt) : null;
+    const newStartAt = dto.startAt ? new Date(dto.startAt) : undefined;
+    
+    // Comparar las fechas correctamente (normalizar a milisegundos para evitar problemas de timezone)
+    const wasRescheduled = newStartAt && oldStartAt && 
+      Math.abs(newStartAt.getTime() - oldStartAt.getTime()) > 1000; // Más de 1 segundo de diferencia
+
+    this.logger.debug(
+      `Updating session ${sessionId}. Old startAt: ${oldStartAt?.toISOString()}, New startAt: ${newStartAt?.toISOString()}, Was rescheduled: ${wasRescheduled}`
+    );
+
     const patch: UpdateData = {};
-    if (dto.startAt) patch.startAt = new Date(dto.startAt);
+    if (dto.startAt && newStartAt) patch.startAt = newStartAt;
     if (dto.durationMin !== undefined) patch.durationMin = dto.durationMin;
     if (dto.capacity !== undefined) patch.capacity = dto.capacity;
 
-    const ctx = new SessionContext(s, {}, new Date());
+    const ctx = new SessionContext(
+      s,
+      {
+        reservations: {
+          cancelAllBySession: (sessionId: string, reason?: string) =>
+            this.reservationService.cancelAllBySession(sessionId, reason),
+        },
+      },
+      new Date(),
+    );
     await ctx.update(patch);
-    return this.sessionRepo.save(ctx.getAggregate());
+    const updatedSession = await this.sessionRepo.save(ctx.getAggregate());
+
+    // Si se reprogramó la sesión, actualizar las reservas y crear notificaciones
+    if (wasRescheduled && oldStartAt) {
+      this.logger.log(`Session ${sessionId} was rescheduled. Updating reservations and sending notifications.`);
+      // Actualizar todas las reservas de la sesión (actualiza el updatedAt)
+      await this.reservationService.updateAllBySession(sessionId);
+      // Crear notificaciones para todos los usuarios con reservas
+      await this.notifierService.notifySessionRescheduled(sessionId, oldStartAt);
+    }
+
+    return updatedSession;
   }
 
   async cancelSession(sessionId: string, reason?: string): Promise<ClassSession> {
     const s = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!s) throw new NotFoundException('Sesión no encontrada');
 
-    const ctx = new SessionContext(s, /* adapters */ {}, new Date());
+    this.logger.log(`Canceling session ${sessionId}. Reason: ${reason || 'No reason provided'}`);
+
+    // IMPORTANTE: Buscar las reservas ANTES de cancelarlas para poder crear notificaciones
+    await this.notifierService.notifySessionCanceled(sessionId, reason);
+
+    const ctx = new SessionContext(
+      s,
+      {
+        reservations: {
+          cancelAllBySession: (sessionId: string, reason?: string) => {
+            this.logger.debug(`Canceling all reservations for session ${sessionId}`);
+            return this.reservationService.cancelAllBySession(sessionId, reason);
+          },
+        },
+      },
+      new Date(),
+    );
     await ctx.cancel(reason);
-    return this.sessionRepo.save(ctx.getAggregate());
+    const canceledSession = await this.sessionRepo.save(ctx.getAggregate());
+
+    this.logger.log(`Session ${sessionId} canceled successfully. Status: ${canceledSession.status}`);
+
+    return canceledSession;
   }
 
   async startSession(sessionId: string): Promise<ClassSession> {

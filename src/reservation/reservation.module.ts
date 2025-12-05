@@ -8,6 +8,7 @@ import { ClassSession } from 'src/class/class-session.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([Reservation, ClassSession])],
   controllers: [ReservationController],
-  providers: [ReservationService]
+  providers: [ReservationService],
+  exports: [ReservationService],
 })
 export class ReservationModule {}

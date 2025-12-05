@@ -5,11 +5,16 @@ import helmet from 'helmet' // Seguridad HTTP (cabeceras)
 import compression from 'compression'; // Comprimir respuestas (gzip/br)
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { DatabaseSeeder } from './database/database.seeder';
 
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const logger = new Logger('Bootstrap');
+
+  // Ejecutar seeder si está habilitado
+  const seeder = app.get(DatabaseSeeder);
+  await seeder.seed();
 
   // Servir archivos estáticos desde la carpeta uploads
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
